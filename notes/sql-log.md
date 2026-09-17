@@ -44,3 +44,19 @@
 **Struggled with:** Mainly on LEFT JOIN + WHERE vs ON, conditional aggregation, and for 1174, how to get the complete row corresponding to each customer's MIN(order_date) rather than just finding the minimum date.
 
 **Build:** Data quality profile of the Bengaluru dataset. 9 documented defects — society 41.31% null, total_sqft non-numeric in 247 rows (ranges + mixed units), 507 duplicate groups / 744 extra rows on composite key, price right-skewed (mean 112.57 vs median 72.00), implausible extremes (max bath 40, 43 Bedroom), 22 location casing variants. Committed
+
+## W1D4 — Thu 17 Sep 2026 — Sorting and grouping
+
+| # | Problem | Pattern | Note |
+|---|---|---|---|
+| 2356 | Number of Unique Subjects Taught by Each Teacher | COUNT(DISTINCT) + GROUP BY | Count unique subjects per teacher. `dept_id` is in the schema but irrelevant to the answer |
+| 1141 | User Activity for the Past 30 Days I | COUNT(DISTINCT) + date filter + GROUP BY | Unique active users per day. Any activity qualifies, so no `activity_type` filter needed |
+| 1070 | Product Sales Analysis III | MIN() + subquery + composite `(product_id, year) IN` | Earliest year per product, then all sales in that year. "First year" ≠ "first sale" — multiple rows in the same first year all qualify |
+| 596 | Classes With at Least 5 Students | GROUP BY + COUNT + HAVING | Standard group-then-filter shape |
+| 1729 | Find Followers Count | GROUP BY + COUNT | Straightforward |
+
+**Concept of the day:** not every column in the schema belongs in the query. `dept_id` in 2356 and `activity_type` in 1141 were both present and both irrelevant. Reading the question for the required grain first, then picking columns, avoids writing a filter or a join that the answer doesn't need.
+
+**Struggled with:** Very little. Only real friction was spotting `COUNT(DISTINCT)` in 2356 after being distracted by irrelevant columns. Pattern recognition was noticeably faster than earlier in the week — GROUP BY + COUNT, COUNT(DISTINCT), and MIN() + subquery all surfaced quickly.
+
+**Build:** None — rescheduled to Saturday Deep Build (total_sqft range parsing).
