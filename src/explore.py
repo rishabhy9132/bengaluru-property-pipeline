@@ -1,8 +1,31 @@
+"""Run a .sql file against the Bengaluru housing dataset via DuckDB.
+
+Usage:
+    python src/explore.py                     # defaults to sql/01_explore.sql
+    python src/explore.py sql/02_quality.sql
+"""
+
+import sys
 import duckdb
 
-with open("sql/01_explore.sql") as f:
-    queries = [q.strip() for q in f.read().split(";") if q.strip()]
+DEFAULT_SQL = "sql/01_explore.sql"
 
-for q in queries:
-    print(f"\n{q.splitlines()[0]}")
-    duckdb.sql(q).show()
+
+def load_queries(path):
+    with open(path) as f:
+        return [q.strip() for q in f.read().split(";") if q.strip()]
+
+
+def main():
+    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SQL
+    queries = load_queries(path)
+    print(f"Running {len(queries)} queries from {path}")
+
+    for i, q in enumerate(queries, start=1):
+        header = q.splitlines()[0].lstrip("- ").strip()
+        print(f"\n[{i}/{len(queries)}] {header}")
+        duckdb.sql(q).show()
+
+
+if __name__ == "__main__":
+    main()
