@@ -62,3 +62,13 @@ Source profiled before any transformation logic was written.
 - **Remaining nulls:** `balcony` 4.57% (609), `bath` 0.55% (73), `size` 0.12%
   (16), `location` 0.01% (1). `area_type`, `availability` and `price` are fully
   populated. Note `AVG(balcony)` silently computes over 12,711 rows, not 13,320.
+
+  ## Cleaning decisions
+
+- **`total_sqft`** — 247 non-numeric values resolved rather than dropped.
+  Ranges converted to midpoints, unit-suffixed values converted to square feet
+  (Sq. Meter ×10.7639, Perch ×272.25, Sq. Yards ×9, Acres ×43560, Cents ×435.6,
+  Guntha ×1089, Grounds ×2400). A boolean `sqft_is_estimated` flag marks every
+  derived value so downstream consumers can exclude them. Dropping 1.9% of rows
+  would have been simpler but biases the dataset — the non-numeric entries
+  cluster on irregular plots and non-standard units, not at random.
