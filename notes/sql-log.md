@@ -60,3 +60,25 @@
 **Struggled with:** Very little. Only real friction was spotting `COUNT(DISTINCT)` in 2356 after being distracted by irrelevant columns. Pattern recognition was noticeably faster than earlier in the week — GROUP BY + COUNT, COUNT(DISTINCT), and MIN() + subquery all surfaced quickly.
 
 **Build:** None — rescheduled to Saturday Deep Build (total_sqft range parsing).
+
+## W1D5 — Fri 18 Sep 2026 — Subqueries and self-joins
+
+| # | Problem | Pattern | Note |
+|---|---|---|---|
+| 1978 | Employees Whose Manager Left the Company | NOT IN subquery + filter | Easy |
+| 626 | Exchange Seats | Self-join to reach an adjacent row | s1 = current row, s2 = row whose value we want. JOIN conditions must agree — `s1.id = s2.id AND s1.id = s2.id + 1` is self-contradictory. LEFT JOIN needed so the unmatched last row survives |
+| 1321 | Restaurant Growth | Rolling 7-day window via anchor date + range join | `c2.visited_on BETWEEN c1.visited_on - INTERVAL 6 DAY AND c1.visited_on`. c1 must be `SELECT DISTINCT visited_on` — one row per date, not per transaction. c2 is transactions, so `SUM(c2.amount)`. Completeness gate is `HAVING COUNT(DISTINCT c2.visited_on) = 7` |
+| 602 | Friend Requests II | UNION ALL + GROUP BY | Friendship is bidirectional, so stack requester and acceptor into one column. UNION ALL not UNION — duplicates are the count. `MAX(COUNT(*))` needs a second query level; ORDER BY + LIMIT 1 works because the max is guaranteed unique |
+| 585 | Investments in 2016 | Two subqueries with different grain, filtering original rows | `tiv_2015` duplicated needs `GROUP BY tiv_2015`; unique location needs `GROUP BY lat, lon`. Different grouping dimensions, so two separate subqueries, then filter the original table with both `IN` conditions. `pid` is unnecessary — the original row already connects all four columns |
+
+**Concept of the day:** before any join, ask what one row of each alias represents. In 1321, using the full Customer table as the anchor meant dates with multiple visitors calculated the same 7-day window several times and produced duplicated totals. The join didn't error — the number was just wrong. Grain is the thing to check, not syntax.
+
+**Second concept — join vs union.** JOIN puts related rows side by side (adds columns). UNION ALL stacks rows from two queries (adds rows). In 602 the instinct was to join requester and acceptor; the actual need was to stack them.
+
+**Third — nested aggregation.** `MAX(COUNT(*))` is two aggregation levels and needs a subquery or window function. ORDER BY + LIMIT 1 is the shortcut when the max is guaranteed unique.
+
+**Also learned:** `DATEDIFF()` measures a gap between dates, it doesn't subtract days. Use `date - INTERVAL 6 DAY` to construct a window. `COUNT(x)` counts rows; `COUNT(DISTINCT x)` counts values — the difference is the whole 7-day check.
+
+**Struggled with:** 585 was the hardest of the day — recognising that two conditions at different grains means two separate subqueries rather than one clever GROUP BY. 1321 close behind: anchor rows vs window rows, and why DISTINCT was required on the anchor. Block ran ~1h over schedule.
+
+**Build:** `total_sqft` parsed — ranges to midpoints, unit conversions (Sq. Meter, Sq. Yards, Perch, Acres, Cents, Guntha, Grounds) to square feet, `sqft_is_estimated` flag on all 247 derived values. Committed as `sql/03_clean_sqft.sql` + README cleaning decisions. First CTE written, ahead of Week 3.
