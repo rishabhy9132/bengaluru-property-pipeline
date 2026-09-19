@@ -4,25 +4,37 @@ End-to-end data pipeline: public property listings → cloud storage →
 transformation → analytics layer.
 
 ## Architecture
-TODO
+
+Batch pipeline, run on a schedule, idempotent by design.
+
+
+**Current stage:** profiling and cleaning, local DuckDB. Cloud ingestion (ADLS
+Gen2 + ADF), transformation (Databricks/Delta) and the dbt modelling layer
+arrive later.
+
+**Idempotency:** the source has no surrogate key, so a deterministic hash of
+(location, size, total_sqft, bath, balcony, price) is generated at ingestion.
+Re-running the pipeline on the same source produces identical keys, so loads
+are repeatable without duplication.
 
 ## Stack
+
 DuckDB · SQL · Python 3.13 · Git
 
 ## Data
+
 Source: Bengaluru House Price Data (Kaggle).
 Download the CSV and place it at `data/Bengaluru_House_Data.csv`.
 The `data/` directory is gitignored — no raw data is committed.
-
-## Status
-Week 1 — project initialised.
 
 ## Running
 
 ```bash
 source .venv/bin/activate
-python src/explore.py                     # exploration queries
-python src/explore.py sql/02_quality.sql  # data quality profile
+python src/explore.py sql/01_explore.sql     # exploration
+python src/explore.py sql/02_quality.sql     # data quality profile
+python src/explore.py sql/03_clean_sqft.sql  # total_sqft parsing
+python src/explore.py sql/04_clean_size.sql  # size parsing
 ```
 
 ## Data quality notes
@@ -35,40 +47,46 @@ Source profiled before any transformation logic was written.
   would silently drop four listings in ten.
 - **`total_sqft` imports as VARCHAR, not numeric.** 247 values (1.9%) fail a
   numeric cast — ranges (`2249.81 - 4112.19`) and mixed units (`142.61Sq. Meter`,
-  also Perch and Sq. Yards). Any area-based metric needs parsing and unit
-  conversion first.
+  also Perch, Sq. Yards, Acres, Cents, Guntha, Grounds).
 - **`size` uses three vocabularies for one concept** — 32 distinct values across
   `BHK` (5,199 for 2 BHK, 4,310 for 3 BHK), `Bedroom` (826 for 4 Bedroom, 547
   for 3 Bedroom) and `RK`. `2 BHK` and `2 Bedroom` group separately despite
-  being equivalent. Must be parsed to a numeric bedroom count plus a unit flag.
+  being equivalent, so any `GROUP BY size` double-counts.
 - **`area_type` is clean** — 4 values, no nulls: Super built-up (8,790), Built-up
   (2,418), Plot (2,025), Carpet (87). The only field ready to serve as a
   dimension as-is, though Carpet Area at 0.65% of rows is too thin for reliable
-  comparison.
+  comparison. The four types measure physically different things, so ₹/sqft is
+  not comparable across them without segmenting.
 - **507 duplicate groups, 744 extra rows** on the composite natural key
-  (location, size, total_sqft, bath, balcony, price). No surrogate key in
-  source, so a deterministic key must be generated during ingestion.
+  (location, size, total_sqft, bath, balcony, price). No surrogate key in source.
 - **`price` is heavily right-skewed** — mean 112.57 lakh vs median 72.00 lakh,
   range 8 to 3,600. Average price by locality overstates the typical listing;
   median is the correct default measure.
-- **Physically implausible extremes across correlated fields** — `max(bath) = 40`,
+- **Physically implausible extremes across correlated fields** — `max(bath) = 40`
   alongside `43 Bedroom`, `27 BHK`, `19 BHK`, `18 Bedroom` (1 row each). The
   agreement between bath and size suggests a small set of entry errors or
-  commercial listings rather than a single-column glitch. Needs a bounds check
-  and a decision: exclude, or flag and retain.
+  commercial listings rather than a single-column glitch.
 - **`location` has 1,305 distinct values, 1,283 after TRIM + LOWER** — 22 casing
-  or whitespace variants of existing localities. Low volume, but must be
-  normalised before location becomes a dimension key.
+  or whitespace variants. Normalising catches formatting only; `Whitefield` vs
+  `White Field` remain distinct and need real entity resolution.
 - **Remaining nulls:** `balcony` 4.57% (609), `bath` 0.55% (73), `size` 0.12%
   (16), `location` 0.01% (1). `area_type`, `availability` and `price` are fully
   populated. Note `AVG(balcony)` silently computes over 12,711 rows, not 13,320.
 
-  ## Cleaning decisions
+## Cleaning decisions
 
-- **`total_sqft`** — 247 non-numeric values resolved rather than dropped.
-  Ranges converted to midpoints, unit-suffixed values converted to square feet
+- **`total_sqft`** — 247 non-numeric values resolved rather than dropped. Ranges
+  converted to midpoints, unit-suffixed values converted to square feet
   (Sq. Meter ×10.7639, Perch ×272.25, Sq. Yards ×9, Acres ×43560, Cents ×435.6,
   Guntha ×1089, Grounds ×2400). A boolean `sqft_is_estimated` flag marks every
   derived value so downstream consumers can exclude them. Dropping 1.9% of rows
   would have been simpler but biases the dataset — the non-numeric entries
   cluster on irregular plots and non-standard units, not at random.
+- **`size`** — parsed into `bedrooms INT` plus a `unit_type` flag. `BHK` and
+  `Bedroom` map to the same unit type because they denote the same thing; this
+  is what fixes the double-count (2 BHK + 2 Bedroom = 5,528 in one group).
+  `RK` is kept separate: room-plus-kitchen is not a bedroom count, and
+  collapsing it would misstate the housing type.
+- **Open:** duplicate handling, `society` null strategy, `location` entity
+  resolution, and the bath/bedroom outliers are documented but not yet resolved.
+  Each needs a defensible rule rather than a silent default.
