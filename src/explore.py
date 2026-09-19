@@ -3,6 +3,8 @@
 Usage:
     python src/explore.py                     # defaults to sql/01_explore.sql
     python src/explore.py sql/02_quality.sql
+    python src/explore.py sql/03_clean_sqft.sql
+    python src/explore.py sql/04_clean_size.sql
 """
 
 import sys
